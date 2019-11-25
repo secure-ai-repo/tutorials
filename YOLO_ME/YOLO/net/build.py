@@ -222,6 +222,39 @@ def train(self):
 pool = ThreadPool()
 
 
+def savepb(self):
+    """
+    Create a standalone const graph def So that C++ can load and run it.
+    """
+    basenet_ckpt = self.basenet
+    flags_ckpt = self.FLAGS
+    flags_ckpt.savepb = None  # signal
+
+    with self.graph.as_default() as g:
+        for var in tf.trainable_variables():
+            print(var.name)
+            name = ':'.join(var.name.split(':')[:-1])
+            var_name = name.split('-')
+            val = var.eval(self.sess)
+            l_idx = int(var_name[0])
+            w_sig = var_name[-1]
+            trained = var.eval(self.sess)
+            basenet_ckpt.layers[l_idx].w[w_sig] = trained
+
+    for layer in basenet_ckpt.layers:
+        for ph in layer.h:  # Set all placeholders to dfault val
+            layer.h[ph] = self.feed[layer.h[ph]]['dfault']
+
+    myyolov2_ckpt = MY_YOLO2(basenet=basenet_ckpt, FLAGS=self.FLAGS)
+    myyolov2_ckpt.sess = tf.Session(graph=myyolov2_ckpt.graph)
+    # myyolov2_ckpt.predict() # uncomment for unit testing
+
+    name = 'graph-{}.pb'.format(self.meta['model'])
+    print('Saving const graph def to {}'.format(name))
+    graph_def = myyolov2_ckpt.sess.graph_def
+    tf.train.write_graph(graph_def, './', name, False)
+
+
 def predict(self):
     inp_path = self.FLAGS.imgdir
     all_inps = os.listdir(inp_path)
@@ -244,7 +277,7 @@ def predict(self):
         inp_feed = pool.map(lambda inp: (np.expand_dims(self.framework.preprocess(os.path.join(inp_path, inp)), 0)), this_batch)
 
         # Feed to the net
-        feed_dict = {self.inp : np.concatenate(inp_feed, 0)}
+        feed_dict = {self.inp: np.concatenate(inp_feed, 0)}
         print('Forwarding {} inputs ...'.format(len(inp_feed)))
         start = time.time()
         out = self.sess.run(self.out, feed_dict)
@@ -276,6 +309,7 @@ class MY_YOLO2(object):
     # Class methods
     say = say
     train = train
+    savepb =savepb
     predict = predict
 
     def __init__(self, FLAGS, basenet=None):
@@ -286,7 +320,7 @@ class MY_YOLO2(object):
             self.graph = tf.Graph()
 
         if basenet is None:
-            basenet = BaseCNN(FLAGS)
+            basenet = BaseCNN(FLAGS)   # <<==== initialize CNN (DarkNet) parameters
             self.ntrain = len(basenet.layers)
 
         self.num_layer = len(basenet.layers)
@@ -295,7 +329,7 @@ class MY_YOLO2(object):
         self.meta = basenet.meta
         self.basenet = basenet
 
-        self.framework = YOLOv2(basenet.meta, FLAGS)  # initialize YOLOv2 parameters
+        self.framework = YOLOv2(basenet.meta, FLAGS)  # <<=== initialize YOLOv2 parameters
 
         print('\nBuilding net ...')
         start = time.time()
@@ -355,6 +389,10 @@ tfnet = MY_YOLO2(FLAGS)
 if FLAGS.train:
     print('Enter training ...');
     tfnet.train()
+
+if FLAGS.savepb:
+    print('Rebuild a constant version ...')
+    tfnet.savepb(); exit('Done')
 
 tfnet.predict()
 
