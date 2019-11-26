@@ -17,7 +17,7 @@ import time
 import math
 from multiprocessing.pool import ThreadPool
 from time import time as timer
-from YOLO.defaults import argHandler
+from YOLO.defaults_org import argHandler
 from YOLO.net.tensorop import op_types, identity
 from YOLO.net.tensorop import HEADER, LINE
 from YOLO.net import yolo
@@ -229,28 +229,34 @@ def savepb(self):
     basenet_ckpt = self.basenet
     flags_ckpt = self.FLAGS
     flags_ckpt.savepb = None  # signal
+    flags_ckpt.train = False
 
-    with self.graph.as_default() as g:
-        for var in tf.trainable_variables():
-            print(var.name)
-            name = ':'.join(var.name.split(':')[:-1])
-            var_name = name.split('-')
-            val = var.eval(self.sess)
-            l_idx = int(var_name[0])
-            w_sig = var_name[-1]
-            trained = var.eval(self.sess)
-            basenet_ckpt.layers[l_idx].w[w_sig] = trained
+    # with self.graph.as_default() as g:
+    #     for var in tf.trainable_variables():
+    #         print(var.name)
+    #         name = ':'.join(var.name.split(':')[:-1]) # convert list to string
+    #         var_name = name.split('-')
+    #         # val = var.eval(self.sess)
+    #         l_idx = int(var_name[0])
+    #         w_sig = var_name[-1]
+    #         trained = var.eval(self.sess)
+    #         basenet_ckpt.layers[l_idx].w[w_sig] = trained
+    #
+    # for layer in basenet_ckpt.layers:
+    #     for ph in layer.h:  # Set all placeholders to dfault val
+    #         layer.h[ph] = self.feed[layer.h[ph]]
 
-    for layer in basenet_ckpt.layers:
-        for ph in layer.h:  # Set all placeholders to dfault val
-            layer.h[ph] = self.feed[layer.h[ph]]['dfault']
-
-    myyolov2_ckpt = MY_YOLO2(basenet=basenet_ckpt, FLAGS=self.FLAGS)
+    myyolov2_ckpt = MY_YOLO2(basenet=basenet_ckpt, FLAGS=flags_ckpt)
     myyolov2_ckpt.sess = tf.Session(graph=myyolov2_ckpt.graph)
     # myyolov2_ckpt.predict() # uncomment for unit testing
 
-    name = 'graph-{}.pb'.format(self.meta['model'])
+    name = 'graph-{}.pb'.format(self.meta['name'])
+    os.makedirs(os.path.dirname(name), exist_ok=True)
     print('Saving const graph def to {}'.format(name))
+    # Save dump of everything in meta
+    with open('built_graph/{}.meta'.format(self.meta['name']), 'w') as fp:
+        json.dump(self.meta, fp)
+    self.say('Saving const graph def to {}'.format(name))
     graph_def = myyolov2_ckpt.sess.graph_def
     tf.train.write_graph(graph_def, './', name, False)
 
@@ -343,7 +349,7 @@ class MY_YOLO2(object):
             # import ipdb; ipdb.set_trace()  # XXX_BREAKPOINT
 
             # Build the forward pass
-            state = identity(self.inp)
+            state = identity(self.inp) # identity class
             roof = self.num_layer - self.ntrain
             self.say(HEADER, LINE)
             for i, layer in enumerate(basenet.layers):
