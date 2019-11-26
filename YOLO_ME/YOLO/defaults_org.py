@@ -7,24 +7,25 @@ class argHandler(dict):
     _descriptions = {'help, --h, -h': 'show this super helpful message and exit'}
 
     def setDefaults(self):
-        self.define('imgdir', 'C:\\Users\\mpole\\YOLO_ME\\sample_img\\', 'path to testing directory with images')
-        self.define('binary', 'C:\\Users\\mpole\\YOLO_ME\\YOLO\\net\\bin\\', 'path to .weights directory')
-        self.define('config', 'C:\\Users\mpole\\YOLO_ME\\cfg\\', 'path to .cfg directory')
-        self.define('dataset', 'C:\\Users\\mpole\\YOLO_ME\\data\\JPEGImages\\', 'path to dataset directory')
+        self.define('imgdir', './data/JPEGImages/', 'path to testing directory with images')
+        self.define('binary', './bin/', 'path to .weights directory')
+        self.define('config', '../../cfg/', 'path to .cfg directory')
+        self.define('dataset', '../../data/JPEGImages/', 'path to dataset directory')
         self.define('labels', '', 'path to labels file')
-        self.define('backup', 'C:\\Users\\mpole\\YOLO_ME\\YOLO\\net\\ckpt\\', 'path to backup folder')
+        self.define('backup', './YOLO/net/ckpt/', 'path to backup folder')
         self.define('summary', '', 'path to TensorBoard summaries directory')
-        self.define('annotation', 'C:\\Users\\mpole\\YOLO_ME\\data\\Annotations\\', 'path to annotation directory')
-        self.define('threshold', -0.1, 'detection threshold')
-        self.define('model', 'C:\\Users\\mpole\\YOLO_ME\\cfg\\yolov2_voc.cfg', 'configuration of choice')
+        self.define('annotation', '../../data/Annotations/', 'path to annotation directory')
+        self.define('threshold', 0.3, 'detection threshold')
+        self.define('model', '../../cfg/yolov2_voc.cfg', 'configuration of choice')
         self.define('trainer', 'rmsprop', 'training algorithm')
         self.define('momentum', 0.0, 'applicable for rmsprop and momentum optimizers')
         self.define('train', True, 'train the whole net')
-        self.define('load', 'C:\\Users\\mpole\\YOLO_ME\\YOLO\\net\\bin\\yolov2_voc.weights', 'how to initialize the net? Either from .weights')
+        self.define('savepb', True, 'train the whole net')
+        self.define('load', './bin/yolov2_voc.weights', 'how to initialize the net? Either from .weights')
         self.define('lr', 1e-5, 'learning rate')
         self.define('keep', 20,'Number of most recent training results to save')
         self.define('batch', 16, 'batch size')
-        self.define('epoch', 1000, 'number of epoch')
+        self.define('epoch', 2, 'number of epoch') # 100
 
     def define(self, argName, default, description):
         self[argName] = default
