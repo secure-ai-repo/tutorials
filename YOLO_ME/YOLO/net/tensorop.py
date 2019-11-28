@@ -38,47 +38,56 @@ class BaseOp(object):
         self.out = None  # tf.Tensor
         self.lay = layer
 
-        self.scope = '{}-{}'.format(str(self.num), self.lay.type)
-        self.gap = roof - self.num
+        self.scope = '{}-{}'.format(str(self.num), self.lay.type) # name
+        self.gap = roof - self.num                                # roof (0) = self.num_layer - self.ntrain (53 - 53)
         self.var = not self.gap > 0
         self.act = 'Load '
-        """convert self.lay to variables & placeholders"""
-        for var_w in self.lay.wshape:
-            """wrap layer.w into variables"""
-            val = self.lay.w.get(var_w, None)
-            if val is None:
-                shape = self.lay.wshape[var_w]
-                args = [0., 1e-2, shape]
-                if 'moving_mean' in var_w:
-                    val = np.zeros(shape)
-                elif 'moving_variance' in var_w:
-                    val = np.ones(shape)
-                else:
-                    val = np.random.normal(*args)
-                self.lay.w[var_w] = val.astype(np.float32)
-                self.act = 'Init '
-            if not self.var: continue
 
-            val = self.lay.w[var_w]
-            self.lay.w[var_w] = tf.constant_initializer(val)
-            if var_w in self._SLIM: continue
-            with tf.compat.v1.variable_scope(self.scope):
-                self.lay.w[var_w] = tf.compat.v1.get_variable(var_w, shape=self.lay.wshape[var_w], dtype=tf.float32,
-                                                  initializer=self.lay.w[var_w])
-        for ph in self.lay.h:
-            """wrap layer.h into placeholders"""
-            phtype = type(self.lay.h[ph])
-            if phtype is not dict: continue
-            sig = '{}/{}'.format(self.scope, ph)
-            val_h = self.lay.h[ph]
-            self.lay.h[ph] = tf.compat.v1.placeholder_with_default(val_h['default'], val_h['shape'], name=sig)
-            feed[self.lay.h[ph]] = val_h['feed']    # feed_dict = {tensor(i): np_array(i)}
-
+        self.convert(feed)
         if self.var:
-            self.train_msg = 'Yes! '
+            self.train_msg = 'Yep! '
         else:
-            self.train_msg = 'No! '
+            self.train_msg = 'Nope '
         self.forward()
+
+    def convert(self, feed):
+         """convert self.lay to variables & placeholders"""
+         for var in self.lay.wshape:
+            self.wrap_variable(var)
+         for ph in self.lay.h:
+             self.wrap_pholder(ph, feed)
+
+    def wrap_variable(self, var):
+        """wrap layer.w into variables"""
+        val = self.lay.w.get(var, None)
+        if val is None:
+            shape = self.lay.wshape[var]
+            args = [0., 1e-2, shape]
+            if 'moving_mean' in var:
+                val = np.zeros(shape)
+            elif 'moving_variance' in var:
+                val = np.ones(shape)
+            else:
+                val = np.random.normal(*args)
+            self.lay.w[var] = val.astype(np.float32)
+            self.act = 'Init '
+        if not self.var: return
+
+        val = self.lay.w[var]
+        self.lay.w[var] = tf.constant_initializer(val)
+        if var in self._SLIM: return
+        with tf.variable_scope(self.scope):
+            self.lay.w[var] = tf.get_variable(var, shape=self.lay.wshape[var], dtype=tf.float32, initializer=self.lay.w[var])
+
+    def wrap_pholder(self, ph, feed):
+        """wrap layer.h into placeholders"""
+        phtype = type(self.lay.h[ph])
+        if phtype is not dict:
+            return
+        sig = '{}/{}'.format(self.scope, ph)
+        val = self.lay.h[ph]
+        self.lay.h[ph] = tf.placeholder_with_default(val['default'], val['shape'], name=sig)
+        feed[self.lay.h[ph]] = val['feed']
 
     def verbalise(self):  # console speaker
         msg = str()

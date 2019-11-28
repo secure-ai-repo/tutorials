@@ -228,26 +228,26 @@ def savepb(self):
     """
     basenet_ckpt = self.basenet
     flags_ckpt = self.FLAGS
+    flags_ckpt.summary = None  # signal
+    flags_ckpt.train = False
 
-    # flags_ckpt.savepb = None  # signal
-    # with self.graph.as_default() as g:
-    #     for var in tf.trainable_variables():
-    #         print(var.name)
-    #         name = ':'.join(var.name.split(':')[:-1]) # convert list to string
-    #         var_name = name.split('-')
-    #         l_idx = int(var_name[0])
-    #         w_sig = var_name[-1]
-    #         basenet_ckpt.layers[l_idx].w[w_sig] = var.eval(self.sess)
-    #
-    # for layer in basenet_ckpt.layers:
-    #     for ph in layer.h:  # Set all placeholders to default val
-    #         # layer.h[ph] = self.feed[layer.h[ph]]['default']
-    #         self.lay.h[ph]['default'] = self.feed[self.lay.h[ph]]
-    #         # self.feed[self.lay.h[ph]] = val['feed']
+    with self.graph.as_default() as g:
+        for var in tf.trainable_variables():
+            print(var.name)
+            name = ':'.join(var.name.split(':')[:-1]) # convert list to string
+            var_name = name.split('-')
+            l_idx = int(var_name[0])
+            w_sig = var_name[-1]
+            basenet_ckpt.layers[l_idx].w[w_sig] = var.eval(self.sess)
 
-    tfnet_pb = MY_YOLO2(flags_ckpt, basenet_ckpt)
+    for layer in basenet_ckpt.layers:
+        for ph in layer.h:  # Set all placeholders to default val
+            if self.feed[layer.h[ph]]: # layer.h[ph] = layer.h[ph] # sess.run(b, feed_dict = {a: True})
+                self.feed[layer.h[ph]] =True
+
+    tfnet_new = MY_YOLO2(flags_ckpt, basenet_ckpt)
     # tfnet_new = MY_YOLO2(flags_ckpt)
-    tfnet_pb.sess = tf.Session(graph=tfnet_pb.graph)
+    tfnet_new.sess = tf.Session(graph=tfnet_new.graph)
     # tfnet.predict() # uncomment for unit testing
 
     name = '../../built_graph/graph-{}.pb'.format(self.meta['name'])
@@ -258,7 +258,7 @@ def savepb(self):
         json.dump(self.meta, fp)
 
     self.say('Saving const graph def to {}'.format(name))
-    graph_def = tfnet_pb.sess.graph_def
+    graph_def = tfnet_new.sess.graph_def
     tf.train.write_graph(graph_def, './', name, False)
 
 
@@ -330,42 +330,37 @@ class MY_YOLO2(object):
             basenet = BaseCNN(FLAGS)   # <<==== initialize CNN (DarkNet) parameters
             self.ntrain = len(basenet.layers)  # number of layers for what we want to train
         # self.num_layer = len(basenet.layers)
-
         self.basenet = basenet
         self.num_layer = min(len(basenet.layers), int(self.FLAGS.nblayers)) if self.FLAGS.nblayers else len(basenet.layers)
         model = basename(basenet.meta['model'])
         basenet.meta['name'] = '.'.join(model.split('.')[:-1])
         self.meta = basenet.meta
+
         self.framework = YOLOv2(basenet.meta, FLAGS)  # <<=== initialize YOLOv2 parameters
 
         print('\nBuilding net ...')
-
         start = time.time()
         self.graph = tf.Graph()
+
         with self.graph.as_default() as g:
-            self.ckpt = self.FLAGS.savepb is None
             # Placeholders
             inp_size = [None] + basenet.meta['inp_size']
             self.inp = tf.placeholder(tf.float32, inp_size, 'input')  # tensor-input fetching
+            self.feed = dict()  # other placeholders
+            # import ipdb; ipdb.set_trace()  # XXX_BREAKPOINT
 
+            # Build the forward pass
             state = identity(self.inp) # identity class
             roof = self.num_layer - self.ntrain
-            num = len(self.basenet.layers)
             self.say(HEADER, LINE)
-            self.feed = dict()  # other placeholders
-
-            for i, layer in enumerate(self.basenet.layers):
-                name = '{}-{}'.format(str(i), layer.type)
-                if i + 1 == num: name += '_output'
-                # args = [layer, state, name]
-                args = [layer, state, i, roof]  # chaining tensor operations
-                if not self.ckpt:
-                    args += [self.feed]
+            for i, layer in enumerate(basenet.layers):
+                args = [layer, state, i, roof, self.feed]  # chaining tensor operations
                 layer_type = list(args)[0].type
                 state = op_types[layer_type](*args)  # tensor-class instance
                 mess = state.verbalise()
                 self.say(mess)
             self.say(LINE)
+
             self.top = state
             self.out = tf.identity(state.out, name='output')   # tensor-output instance fetching
 
@@ -394,56 +389,6 @@ class MY_YOLO2(object):
                 self.writer.add_graph(self.sess.graph)
 
         print('Finished in {}s\n'.format(time.time() - start))
-
-    def forward(self):
-        # Placeholder
-        inp_size = [None] + self.meta['inp_size']
-        self.inp = tf.placeholder(tf.float32, inp_size, 'input')
-        self.feed = dict()  # for any other placeholders, e.g. dropout
-
-        # Iterate through darknet layers
-        now = self.inp
-        num = len(self.basenet.layers)
-        for i, layer in enumerate(self.basenet.layers):
-            name = '{}-{}'.format(str(i), layer.type)
-            if i + 1 == num: name += '-mynet_output'
-
-            args = [layer, now, name]
-            if not self.ckpt:
-                args += [self.feed]
-            now = op_types(*args)
-            mess = now.verbalise()
-        # Attach the output to this tfnet
-        self.out = now
-
-    def setup_meta_ops(self):
-        cfg = {'allow_soft_placement': False, 'log_device_placement': False}
-        if self.FLAGS.gpu > 0:
-            utility = min(FLAGS.gpu, 1.)
-            print('GPU mode with {} usage'.format(utility))
-            cfg['gpu_options'] = tf.GPUOptions(per_process_gpu_memory_fraction=utility)
-            cfg['allow_soft_placement'] = True
-
-        self.sess = tf.Session(config=tf.ConfigProto(**cfg))
-        if self.FLAGS.train:
-            self.framework.loss(self.out)  # pass the CNN output to YOLOv2
-            print('Building {} train op'.format(self.basenet.meta['model']))
-
-            optimizer = self._TRAINER[self.FLAGS.trainer](self.FLAGS.lr)
-            gradients = optimizer.compute_gradients(self.framework.loss)
-            self.train_op = optimizer.apply_gradients(gradients)
-
-        self.sess.run(tf.initialize_all_variables())
-
-        if not self.ckpt:
-            self.saver = tf.train.Saver(tf.all_variables(), max_to_keep=self.FLAGS.keep)
-            self.step = int()
-            if self.FLAGS.load > 0:
-                self.step = self.FLAGS.load
-                load_point = 'backup/model-{}'.format(self.FLAGS.load)
-                print('Loading from {}'.format(load_point))
-                self.saver.restore(self.sess, load_point)
-
 
 ## ============================================= ##
 tfnet = MY_YOLO2(FLAGS)
