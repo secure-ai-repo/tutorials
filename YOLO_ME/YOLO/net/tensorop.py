@@ -88,7 +88,7 @@ class BaseOp(object):
         val = self.lay.h[ph]   """layer.h['is_training'] = {'shape': (), 'feed': True, 'default': False} """
         # is_trianing = tf.placeholder_with_default(False, shape=(), name='is_training_')
         self.lay.h[ph] = tf.placeholder_with_default(val['default'], val['shape'], name=sig)
-        feed[self.lay.h[ph]] = val['feed']
+        feed[self.lay.h[ph]] = val['feed'] # feed_dict = {self.lay.h[ph]: True or False}
 
     def verbalise(self):  # console speaker
         msg = str()
