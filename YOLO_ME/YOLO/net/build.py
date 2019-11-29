@@ -353,7 +353,8 @@ class MY_YOLO2(object):
             num = len(self.basenet.layers)
             self.say(HEADER, LINE)
             self.feed = dict()  # other placeholders
-
+            """ ERROR when savepb ==> Tensor("0-onvolutional/kernel:0", shape=(3,3,3,32), dtyp=floate32_ref) must be from the same graph as
+            Tensor("Pad:0", shape=(?, 418,418,3), dtype=float32)"""
             for i, layer in enumerate(self.basenet.layers):
                 name = '{}-{}'.format(str(i), layer.type)
                 if i + 1 == num: name += '_output'
