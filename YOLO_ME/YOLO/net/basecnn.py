@@ -518,7 +518,7 @@ class conv_select_layer(Layer):
         self.wshape = dict({'biases': [real_n], 'kernel': [ksize, ksize, c, real_n]})
         if self.batch_norm:
             self.wshape.update({'moving_variance': [real_n], 'moving_mean': [real_n], 'gamma': [real_n]})
-            self.h['is_training'] = {'shape': (), 'feed': True, 'dfault': False}
+            self.h['is_training'] = {'shape': (), 'feed': True, 'default': False}
 
     @property
     def signature(self):
