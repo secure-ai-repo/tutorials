@@ -85,7 +85,7 @@ class BaseOp(object):
         if phtype is not dict:
             return
         sig = '{}/{}'.format(self.scope, ph)
-        val = self.lay.h[ph]
+        val = self.lay.h[ph]   """layer.h['is_training'] = {'shape': (), 'feed': True, 'default': False} """
         self.lay.h[ph] = tf.placeholder_with_default(val['default'], val['shape'], name=sig)
         feed[self.lay.h[ph]] = val['feed']
 
