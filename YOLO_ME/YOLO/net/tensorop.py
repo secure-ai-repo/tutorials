@@ -54,7 +54,7 @@ class BaseOp(object):
          """convert self.lay to variables & placeholders"""
          for var in self.lay.wshape:
             self.wrap_variable(var)
-         for ph in self.lay.h:
+         for ph in self.lay.h: # ph = 'is_training'
              self.wrap_pholder(ph, feed)
 
     def wrap_variable(self, var):
@@ -86,6 +86,7 @@ class BaseOp(object):
             return
         sig = '{}/{}'.format(self.scope, ph)
         val = self.lay.h[ph]   """layer.h['is_training'] = {'shape': (), 'feed': True, 'default': False} """
+        # is_trianing = tf.placeholder_with_default(False, shape=(), name='is_training_')
         self.lay.h[ph] = tf.placeholder_with_default(val['default'], val['shape'], name=sig)
         feed[self.lay.h[ph]] = val['feed']
 
